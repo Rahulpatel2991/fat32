@@ -50,9 +50,11 @@ int dir_info(DIR_ENTRY *dir_buff,FILE *fp,unsigned int Firstdata_sec,unsigned in
 	unsigned char buff[64];
 	unsigned int Nextdata=0;
 
-	FILE * old = fp;
-
+	unsigned long offset;
+	
+	offset=ftell(fp);
 	rewind(fp);
+
 	Nextdata=Firstdata_sec + (N-2)*0x200;
 	printf("Nextdata=%x\n",Nextdata);	
 	fseek(fp,Nextdata,SEEK_SET);
@@ -79,7 +81,7 @@ int dir_info(DIR_ENTRY *dir_buff,FILE *fp,unsigned int Firstdata_sec,unsigned in
 	
 	if(dir_buff->DIR_Name[0]==0x00)
 	{
-		fp=old;
+		fseek(fp,offset,SEEK_SET);
 		return 0;
 	}
 

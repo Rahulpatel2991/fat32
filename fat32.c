@@ -23,7 +23,7 @@ int main(int argc, char* argv[])
 		printf("Usage:- < %s file_name >",argv[0]);
 		return -1;
 	}
-	if((fp =fopen ("fat32.img","rb"))==NULL){
+	if((fp =fopen (argv[1],"rb"))==NULL){
 		printf("ERROR\n");
 		return -1;
 	}
@@ -34,7 +34,6 @@ int main(int argc, char* argv[])
 
 	Firstdata_sec =( (ptr->BPB_RsvdSecCnt) + (ptr->BPB_NumFATs) * (ptr-> BPB_FATSz32) ) * (ptr->BPB_BytsPerSec);
 
-printf("Firstdata=%X\n",Firstdata_sec);
 
 rewind(fp);
 ret =dir_info(dir_buff,fp,Firstdata_sec,2);
@@ -56,47 +55,52 @@ int dir_info(DIR_ENTRY *dir_buff,FILE *fp,unsigned int Firstdata_sec,unsigned in
 	rewind(fp);
 
 	Nextdata=Firstdata_sec + (N-2)*0x200;
-	printf("Nextdata=%x\n",Nextdata);	
 	fseek(fp,Nextdata,SEEK_SET);
 
-	while(1)
-	{
+	while(1){
 		fread(buff,1,1,fp);
 
-		if(buff[0]=='A')
-		{			
+		if(buff[0]=='A'){			
 			fread(&buff[1],63,1,fp);
 			memcpy(dir_buff,&buff[32],sizeof(DIR_ENTRY));
 		}
-		else
-		{
+
+		else{
 			fread(&buff[1],31,1,fp);
 			memcpy(dir_buff,&buff[1],sizeof(DIR_ENTRY));
 
 		}
 
-	if(dir_buff->DIR_Name[0]==0xE5 || dir_buff->DIR_Name[0]==0x2E)
-		continue;
-		
-	
-	if(dir_buff->DIR_Name[0]==0x00)
-	{
-		fseek(fp,offset,SEEK_SET);
-		return 0;
-	}
 
+		if(buff[0]==0xe5 || buff[0]==0x2e || buff[0]==0x20)
+			continue;
 
-		if(dir_buff->DIR_Attr & 0x10 )
-		{
-			printf("DIR_Name=%s\n",dir_buff->DIR_Name);
-			N= get_int(dir_buff->DIR_FstClusHI,dir_buff->DIR_FstClusLO);	          printf("N=%x\n",N);
-			dir_info(dir_buff,fp,Firstdata_sec,N);
+		if(dir_buff->DIR_Name[0]==0x00){
+			return 0;
 		}
-		else //if(dir_buff->DIR_Attr & 0x20)
-		{			
-		printf("File_Name=%s\n",dir_buff->DIR_Name);
-		printf("%x\n",ftell(fp));
-		//file_info()
+
+		if(dir_buff->DIR_Attr & 0x10 ){
+			unsigned char name[11];
+			int i,j;
+
+			for(j=0,i=0;i<11;i++){
+				if(dir_buff->DIR_Name[i]==0x20)
+					continue;
+				name[j++]=dir_buff->DIR_Name[i];
+			}
+
+			name[j]='\0';
+			printf("DIR_Name=%s\n",name);
+
+			N= get_int(dir_buff->DIR_FstClusHI,dir_buff->DIR_FstClusLO);	       
+			offset=ftell(fp);
+
+			dir_info(dir_buff,fp,Firstdata_sec,N);
+			fseek(fp,offset,SEEK_SET);
+		}
+
+		else {			
+			printf("File_Name=%s\n",dir_buff->DIR_Name);
 		}
 	}
 }

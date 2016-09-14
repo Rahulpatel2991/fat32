@@ -6,9 +6,14 @@
 #include"fat32.h"
 #include<string.h>
 
-void boot_info(boot_BPB * ptr, FILE *fp);
-int dir_info(DIR_ENTRY *dir_buff,FILE *fp,unsigned int Firstdata_sec,unsigned int N);
-unsigned int get_int(unsigned short num1, unsigned short num2);
+#define INVALID 0x20;
+
+void boot_info(boot_BPB * , FILE *);
+int dir_info(DIR_ENTRY *,FILE *,unsigned int ,unsigned int );
+unsigned int get_int(unsigned short , unsigned short );
+char long_entry(unsigned char );
+void print(unsigned char *,int);
+
 
 
 int main(int argc, char* argv[])
@@ -32,79 +37,86 @@ int main(int argc, char* argv[])
 	dir_buff =(DIR_ENTRY *) malloc(sizeof(DIR_ENTRY));	
 	boot_info(ptr,fp);
 
-	Firstdata_sec =( (ptr->BPB_RsvdSecCnt) + (ptr->BPB_NumFATs) * (ptr-> BPB_FATSz32) ) * (ptr->BPB_BytsPerSec);
+	Firstdata_sec =( (ptr->BPB_RsvdSecCnt) + (ptr->BPB_NumFATs) * (ptr-> BPB_FATSz32) ) * (ptr->BPB_BytsPerSec);// first Data sector
 
+	rewind(fp);
+	ret =dir_info(dir_buff,fp,Firstdata_sec,2);
 
-rewind(fp);
-ret =dir_info(dir_buff,fp,Firstdata_sec,2);
-
-fclose(fp);
-return 0;
+	fclose(fp);
+	return 0;
 }
 int dir_info(DIR_ENTRY *dir_buff,FILE *fp,unsigned int Firstdata_sec,unsigned int N)
 {
 
 
-	int i,j;
-	unsigned char buff[64];
+	int i,j,no;
+	unsigned char *buff,ret,ch;
 	unsigned int Nextdata=0;
 
 	unsigned long offset;
-	
-	offset=ftell(fp);
+
+//	offset=ftell(fp);
 	rewind(fp);
 
-	Nextdata=Firstdata_sec + (N-2)*0x200;
+	Nextdata=Firstdata_sec + (N-2)*0x200; 
 	fseek(fp,Nextdata,SEEK_SET);
 
+
+
 	while(1){
-		fread(buff,1,1,fp);
+		fread(&ch,1,1,fp);
+		fseek(fp,-1,SEEK_CUR);
 
-		if(buff[0]=='A'){			
-			fread(&buff[1],63,1,fp);
-			memcpy(dir_buff,&buff[32],sizeof(DIR_ENTRY));
-		}
-
-		else{
-			fread(&buff[1],31,1,fp);
-			memcpy(dir_buff,&buff[1],sizeof(DIR_ENTRY));
-
-		}
-
-
-		if(buff[0]==0xe5 || buff[0]==0x2e || buff[0]==0x20)
+		if(ch==0xe5 || ch==0x2e || ch==0x20){
+			fseek(fp,+32,SEEK_CUR);
 			continue;
+		}
 
-		if(dir_buff->DIR_Name[0]==0x00){
+
+		if(ch==0x00){
 			return 0;
 		}
 
-		if(dir_buff->DIR_Attr & 0x10 ){
-			unsigned char name[11];
-			int i,j;
 
-			for(j=0,i=0;i<11;i++){
-				if(dir_buff->DIR_Name[i]==0x20)
-					continue;
-				name[j++]=dir_buff->DIR_Name[i];
-			}
+		ret=long_entry(ch);
+		no =32*ret + 32;
 
-			name[j]='\0';
-			printf("DIR_Name=%s\n",name);
+		buff = (char*)malloc(no);
+		fread(buff,no,1,fp);
+		
+		
+		memcpy(dir_buff,&buff[no-32],32);
+
+
+		if(dir_buff->DIR_Attr & 0x10)
+		{
+
+			
+			printf("\t Directory\t");
+			
+			print(buff,ret); // directory name;
+	
 
 			N= get_int(dir_buff->DIR_FstClusHI,dir_buff->DIR_FstClusLO);	       
 			offset=ftell(fp);
 
 			dir_info(dir_buff,fp,Firstdata_sec,N);
+
 			fseek(fp,offset,SEEK_SET);
 		}
-
-		else {			
-			printf("File_Name=%s\n",dir_buff->DIR_Name);
+		
+		else
+		{
+			
+			printf("\t file    \t");
+			print(buff,ret); // print file name;
+		
 		}
-	}
-}
 
+//		free(buff);
+	
+}
+}
 
 void boot_info(boot_BPB * ptr, FILE *fp)
 {
@@ -132,4 +144,41 @@ unsigned int get_int(unsigned short num1, unsigned short num2)
 
 	result=(n1 | n2);
 	return result;
+}
+
+char long_entry(unsigned char ch)
+{
+	unsigned int a; 
+
+	if(ch == 0x20 || ch== 0x2E || ch == 0x00 )
+	{
+		return ch;
+	}
+
+	if((ch & 0xF0) == 0x40)
+	{
+		ch = ch & 0x0F;
+		return ch;
+	}
+	else
+		return INVALID;
+}
+
+void print(unsigned char *buff,int ret)
+{
+	int i,j;
+
+	for(i=ret ;i > 0;i--){
+	
+		for(j=32*(i-1);j < 32*i;j++){
+			if(j==0)  // skip first byte;
+			continue;
+
+			if (isprint(buff[j])!=0){
+				printf("%c",buff[j]);
+			}
+
+		}
+		printf("\n");
+	}
 }
